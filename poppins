@@ -1,0 +1,96 @@
+#!/usr/bin/env zsh
+
+## Data already converted pdf -> text
+
+local -a help clean structure words terms all
+zparseopts h=help             -help=help\
+           c=clean            -clean=clean\
+           s=structure        -structure=structure\
+           w=words            -words=words\
+           t=terms            -terms=terms\
+           a=all              -all=all
+
+
+#-- Functions -------------------------------------------------------------------
+
+help () {
+  echo "
+    -*- POPPINS -*-
+
+    Perform processing on data to analyse Ofsted reports
+
+    Flags:
+      -h --help       prints this message
+      -c --clean      performs the cleaning on the data
+                      edits the .txt files and returns .txt files
+      -s --structure  uses the .txt files to build a csv and database output
+      -w --words      generate word clouds for each rating by section
+      -t --terms      investigate tfidf  +NOTE: takes a long time+
+      -a --all        same as -cswt
+
+  "
+}
+
+
+clean () {
+  ## Tidy up file names
+  autoload -U zmv
+  zmv 'data/(*)/(*_*)_*.(txt|bak)' 'data/$1/$2.$3'
+
+  ( ## Clean the files
+    for file in  data/**/*.txt; do
+      perl -i.bak -pe 's/[^[:ascii:]]//g' "$file"  # remove non-ascii chars
+
+      sed -i 's/\f//' "$file"                      # remove ^L characters
+
+      grep -Ev "^\s*[0-9]+\s*" < "$file" > tmp     # remove page numbers
+      mv tmp "$file"
+    done ) 2>logs/clean.txt                        # redirect all sterr
+}
+
+
+structure () {
+  # checking that the system is running python 3 [dependency]
+  [[ -n $(command -v python3) ]] &&\
+    python3 ./bin/structure.py || echo "Could not structure data"
+}
+
+
+# generate word clouds
+words () {
+  [[ -n $(command -v python3) ]] &&\
+    python3 ./bin/cloud.py || echo "Clouds could not be generated"
+}
+
+
+# calculate the tfidf scores for sections in rating groups
+terms () {
+  [[ -n $(command -v python3) ]] && (\
+    echo "We may require your password to proceed to install NLTK data"
+    sudo python3 -m nltk.downloader \
+                 -d /usr/local/share/nltk_data punkt 2> logs/nltk.txt
+    python3 ./bin/tfidf.py
+  )
+}
+
+
+# do everything
+all () {
+  clean
+  structure
+  words
+  terms
+}
+
+
+#-- Runtime ---------------------------------------------------------------------
+
+[[ -n $clean ]] && clean
+[[ -n $structure ]] && structure
+[[ -n $words ]] && words
+[[ -n $terms ]] && terms
+[[ -n $all ]] && all
+
+## catch all for no arguments -- prints help
+[[ -z $(echo $help $clean $structure \
+             $words $terms $all) || -n $help ]] && help

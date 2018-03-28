@@ -1,0 +1,15 @@
+# named files
+.DS_Store
+demo.html
+reports.csv
+ofsted.db
+tf.json
+
+# wildcard file types
+*.pdf
+*.bak
+*.jpg
+
+# directories
+data/other
+logs/*.txt
